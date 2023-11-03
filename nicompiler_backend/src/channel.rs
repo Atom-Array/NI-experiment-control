@@ -98,6 +98,7 @@ pub trait BaseChannel {
     fn samp_rate(&self) -> f64;
     fn name(&self) -> &str;
     fn task_type(&self) -> TaskType;
+    fn dflt_val(&self) -> f64;
     /// The `fresh_compiled` field is set to true by each [`BaseChannel::compile`] call and
     /// `false` by each [`BaseChannel::add_instr`].  
     fn is_fresh_compiled(&self) -> bool;
@@ -175,6 +176,7 @@ pub trait BaseChannel {
     /// channel.compile(3e7 as usize); // Compile up to 3 seconds (given a sampling rate of 10^7)
     /// ```
     fn compile(&mut self, stop_pos: usize) {
+        // 1. Sanity checks
         if self.instr_list().len() == 0 {
             return;
         }
@@ -182,9 +184,6 @@ pub trait BaseChannel {
         if self.is_fresh_compiled() && *self.instr_end().last().unwrap() == stop_pos {
             return;
         }
-        self.clear_compile_cache();
-        *self.fresh_compiled_() = true;
-
         if self.instr_list().last().unwrap().end_pos > stop_pos {
             panic!(
                 "Attempting to compile channel {} with stop_pos {} while instructions end at {}",
@@ -194,16 +193,21 @@ pub trait BaseChannel {
             );
         }
 
-        let mut last_val = 0.;
+        // 2. Clear previous compile cache
+        self.clear_compile_cache();
+
+        // 3. Calculate exhaustive instruction coverage (instructions and paddings)
+
+        let mut last_val = self.dflt_val();
         let mut last_end = 0;
         let mut instr_val: Vec<Instruction> = Vec::new();
         let mut instr_end: Vec<usize> = Vec::new();
 
-        // Padding, instructions are already sorted
+        // Instructions + padding (instructions are already sorted)
         let samp_rate = self.samp_rate();
         for instr_book in self.instr_list().iter() {
+            // Add padding before this instruction
             if last_end != instr_book.start_pos {
-                // Add padding instruction
                 instr_val.push(Instruction::new_const(last_val));
                 instr_end.push(instr_book.start_pos);
             }
@@ -211,6 +215,7 @@ pub trait BaseChannel {
             instr_val.push(instr_book.instr.clone());
             instr_end.push(instr_book.end_pos);
 
+            // Calculate `last_val` at the end of this instruction for the next iteration
             if instr_book.keep_val {
                 last_val = match instr_book.instr.instr_type {
                     // Constant instruction: just retrieve its value for future padding
@@ -224,7 +229,7 @@ pub trait BaseChannel {
                     }
                 };
             } else {
-                last_val = 0.;
+                last_val = self.dflt_val();
             }
             last_end = instr_book.end_pos;
         }
@@ -234,7 +239,8 @@ pub trait BaseChannel {
             instr_end.push(stop_pos);
         }
 
-        // Merge instructions, if possible
+        // 4. Transfer obtained `instr_val` and `instr_end` vectors into compile cache
+        //  Merge instructions whenever possible
         for i in 0..instr_end.len() {
             if self.instr_val().is_empty() || instr_val[i] != *self.instr_val().last().unwrap() {
                 self.instr_val_().push(instr_val[i].clone());
@@ -243,6 +249,8 @@ pub trait BaseChannel {
                 *self.instr_end_().last_mut().unwrap() = instr_end[i];
             }
         }
+
+        *self.fresh_compiled_() = true;
     }
 
     /// Utility function for signal sampling.
@@ -331,7 +339,7 @@ pub trait BaseChannel {
 
     fn add_instr_(&mut self, instr: Instruction, t: f64, duration: f64, keep_val: bool, had_conflict: bool) {
         let start_pos = (t * self.samp_rate()) as usize;
-        let end_pos = ((t * self.samp_rate()) as usize) + ((duration * self.samp_rate()) as usize);
+        let end_pos = start_pos + ((duration * self.samp_rate()) as usize);
         let new_instrbook = InstrBook::new(start_pos, end_pos, keep_val, instr);
         // Upon adding an instruction, the channel is not freshly compiled anymore
         *self.fresh_compiled_() = false;
@@ -341,21 +349,39 @@ pub trait BaseChannel {
         let delta = (1e-3 / self.samp_rate()) as usize;
         if let Some(next) = self.instr_list().range(&new_instrbook..).next() {
             if next.start_pos < new_instrbook.end_pos {
+                // FIXME: [introduced BUG] remove "shifting" logic. Reasons:
+                //  1. Duration of intervals between pulses is just as critical as duration of pulses themselves
+                //  "Random" (from the user viewpoint) and silent "jitter" by 1 ms
+                //  due to rounding errors at the ~100ns level is a huge issue.
+                //  This can easily lead to nonsensical experiment results.
+                //
+                //  2.1 Shifting this pulse by any amount (especially by such a huge amount as 1 ms)
+                //  may lead it to later collide with some other pulse,
+                //  which was otherwise completely legitimate.
+                //
+                //  2.2 If such a shift indeed leads to a collision with another pulse to be added later,
+                //  it will be very confusing for the user - the panic will happen at addition
+                //  of that other pulse and not at the originally conflicting one,
+                //  hiding to original issue in the user script.
+
                 // Accomodate tick conflicts less than delta on the right
-                if !had_conflict && start_pos + delta >= new_instrbook.end_pos {
+                // FIXME: BUG - there was `start_pos` instead of `next.start_pos`
+                if !had_conflict && next.start_pos + delta >= new_instrbook.end_pos {
                     let conflict_ticks = new_instrbook.end_pos - start_pos;
                     assert!(conflict_ticks != 0, "unintended behavior");
+                    // FIXME: jump by the whole 1ms! Not even by just small amount of `conflict_ticks`
                     self.add_instr_(new_instrbook.instr, t - (delta as f64) / self.samp_rate(), duration, keep_val, true);
                     return;
                 } else {
                     panic!(
-                    "Channel {}\n Instruction {} overlaps with the next instruction {}\n",
-                    name, new_instrbook, next
-                );
+                        "Channel {}\n Instruction {} overlaps with the next instruction {}\n",
+                        name, new_instrbook, next
+                    );
                 }
             }
         } 
         if let Some(prev) = self.instr_list().range(..&new_instrbook).next_back() {
+            // FIXME: [introduced BUG] remove "shifting" logic
             if prev.end_pos > new_instrbook.start_pos {
                 // Accomodate tick conflicts less than delta on the right
                 if !had_conflict && new_instrbook.start_pos + delta >= prev.end_pos {
@@ -571,6 +597,10 @@ pub struct Channel {
 impl BaseChannel for Channel {
     fn samp_rate(&self) -> f64 {
         self.samp_rate
+    }
+    fn dflt_val(&self) -> f64 {
+        // FIXME: proper implementation
+        0.0
     }
     fn is_fresh_compiled(&self) -> bool {
         self.fresh_compiled
