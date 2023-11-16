@@ -310,6 +310,17 @@ pub trait BaseExperiment {
     fn compile(&mut self, extra_tail_tick: bool) -> f64 {
         // Called without arguments, compiles based on stop_time of instructions
         let stop_time = self.edit_stop_time(extra_tail_tick);
+
+        // FixMe: the collision panic at the very end of the sequence might be coming from here:
+        //  - there are multiple devices with potentially incommensurate samp_rates
+        //  - the `stop_time` above is a f64 stop time.
+        //    It was obtained as a max of (stop_tick + extra_tick) / dev.samp_rate() collected from all devices
+        //  - Now it is imposed back on all devices
+        //    and each of them again rounds it back to usize according to its own samp_rate
+        //  This sequence of `usize -> f64 -> aggregation -> round back to usize` can for some devices
+        //  lead to loosing a tick at the end and thus to compiling with `stop_time = edit_time - 1` which panics.
+        //  And this would probably only happen for specific combinations of sample rates for different cards.
+
         self.compile_with_stoptime(stop_time);
         assert!(stop_time == self.compiled_stop_time());
         stop_time
@@ -352,6 +363,8 @@ pub trait BaseExperiment {
     /// assert_eq!(exp.compiled_stop_time(), 5.);
     /// ```
     fn compile_with_stoptime(&mut self, stop_time: f64) {
+        // Consider moving start_trig + ref_clk check
+        //  into a separate function `sync_consistency_check()`
         assert!(
             self.devices().values().all(|d| d.export_trig().is_none())
                 || self
@@ -360,7 +373,8 @@ pub trait BaseExperiment {
                     .filter(|d| d.export_trig() == Some(true))
                     .count()
                     == 1,
-            "Cannot compile an experiment with devices expecting yet no device exporting trigger"
+            "Cannot compile an experiment with some devices expecting a start trigger \
+            yet there is no device exporting it"
         );
         self.devices_()
             .values_mut()

@@ -76,6 +76,9 @@ use crate::utils::Semaphore;
 /// If you are not looking to interact directly with NI devices or if your use-case doesn't involve
 /// NI-specific operations, refer to [`nicompiler_backend::Experiment`] for a more general-purpose
 /// experimental control.
+// ToDo: Why is it necessary to duplicate type definition here?
+//  (it was already defined + impl in compiler backend)
+//  Guess: because of some requirement of PyO3 + this crate is compiling into a different target
 #[pyclass]
 pub struct Experiment {
     devices: IndexMap<String, Device>,

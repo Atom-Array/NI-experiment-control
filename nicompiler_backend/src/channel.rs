@@ -286,6 +286,7 @@ pub trait BaseChannel {
     /// assert_eq!(channel.binfind_first_intersect_instr(5), 0);
     /// ```
     fn binfind_first_intersect_instr(&self, start_pos: usize) -> usize {
+        // FixMe: why not to use `isize` instead of i32?
         let mut low: i32 = 0;
         let mut high: i32 = self.instr_end().len() as i32 - 1;
         while low <= high {

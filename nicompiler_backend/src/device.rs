@@ -309,10 +309,14 @@ pub trait BaseDevice {
                         instr_val[i] += *chan_value as f64 * 2.0f64.powf(line as f64);
                         if instr_end[i] == chan.instr_end()[chan_instr_idx] {
                             chan_instr_idx += 1;
+                            // FixMe: evaluation of `val * 2**line_index` can be done once
+                            //  per "current chan instruction" index update
                         }
                     }
                 }
             }
+            // Make-up a channel instance for the port as a whole
+            //  and manually inject calculated `instr_end` and `FuncStruct` (`Instruction`) vectors into it.
             let port_instr_val: Vec<Instruction> = instr_val
                 .iter()
                 .map(|&val| Instruction::new_const(val))
@@ -324,6 +328,7 @@ pub trait BaseDevice {
             );
             *port_channel.instr_val_() = port_instr_val;
             *port_channel.instr_end_() = instr_end;
+            // Manually inject this made-up channel into device's `self.channels` IndexMap
             self.channels_()
                 .insert(port_channel.name().to_string(), port_channel);
         }
@@ -534,6 +539,11 @@ pub trait BaseDevice {
 
         let mut port_numbers = BTreeSet::new();
 
+        // FixMe: intuitively, this function should only depend on what port have been added in with all the registered channels
+        //  But here it is collected from *compiled_channels()*
+        //  - What if one added channels and didn't call `compile()` yet? One just wants to know what channels have been added.
+        //  - What if one added a channel but did not add any instructions to it yet
+        //  (so it probably did not get compiled even after calling `compile()`)
         self.compiled_channels(false, true).iter().for_each(|chan| {
             // Capture the port
             let name = &chan.name();
