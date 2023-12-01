@@ -178,78 +178,78 @@ pub trait BaseChannel {
     /// ```
     fn compile(&mut self, stop_pos: usize) {
         todo!();
-        // (1) Sanity checks
-        if self.instr_list().len() == 0 {
-            return;
-        }
-        // Ignore double compiles
-        if self.is_fresh_compiled() && *self.instr_end().last().unwrap() == stop_pos {
-            return;
-        }
-        if stop_pos < self.instr_list().last().unwrap().end_pos {
-            panic!(
-                "Attempting to compile channel {} with stop_pos {} while instructions end at {}",
-                self.name(),
-                stop_pos,
-                self.instr_list().last().unwrap().end_pos
-            );
-        }
-
-        // (2) Calculate exhaustive instruction coverage (instructions + padding)
-        let mut instr_val: Vec<Instruction> = Vec::new();
-        let mut instr_end: Vec<usize> = Vec::new();
-
-        // Padding (instructions are already sorted)
-        let mut pad_val = self.default_value();
-        let mut last_end = 0;
-        let samp_rate = self.samp_rate();
-
-        for instr_book in self.instr_list().iter() {
-            // Add padding before this instruction
-            if last_end != instr_book.start_pos {
-                instr_val.push(Instruction::new_const(pad_val));
-                instr_end.push(instr_book.start_pos);
-            }
-            // Add original instruction
-            instr_val.push(instr_book.instr.clone());
-            instr_end.push(instr_book.end_pos);
-
-            // Calculate the padding value for the next iteration
-            pad_val = if instr_book.keep_val {
-                match instr_book.instr.instr_type {
-                    // Constant instruction: just retrieve its value for future padding
-                    InstrType::CONST => *instr_book.instr.args.get("value").unwrap(),
-                    // Other instructions: simulate end_pos
-                    _ => {
-                        let t_end = (instr_book.end_pos as f64) / samp_rate;
-                        let mut t_arr = array![t_end];
-                        instr_book.instr.eval_inplace(&mut t_arr.view_mut());
-                        t_arr[0]
-                    }
-                }
-            } else {
-                self.default_value()
-            };
-            last_end = instr_book.end_pos;
-        }
-        // Pad the last instruction
-        if self.instr_list().last().unwrap().end_pos != stop_pos {
-            instr_val.push(Instruction::new_const(pad_val));
-            instr_end.push(stop_pos);
-        }
-
-        // (3) Transfer prepared instr_val and instr_end into compile cache vectors
-        //     (merge adjacent instructions, if possible)
-        self.clear_compile_cache();
-        for i in 0..instr_end.len() {
-            if self.instr_val().is_empty() || instr_val[i] != *self.instr_val().last().unwrap() {
-                self.instr_val_().push(instr_val[i].clone());
-                self.instr_end_().push(instr_end[i]);
-            } else {
-                *self.instr_end_().last_mut().unwrap() = instr_end[i];
-            }
-        }
-        *self.fresh_compiled_() = true;
+        // // (1) Sanity checks
+        // if self.instr_list().len() == 0 {
+        //     return;
+        // }
+        // // Ignore double compiles
+        // if self.is_fresh_compiled() && *self.instr_end().last().unwrap() == stop_pos {
+        //     return;
+        // }
+        // if stop_pos < self.instr_list().last().unwrap().end_pos {
+        //     panic!(
+        //         "Attempting to compile channel {} with stop_pos {} while instructions end at {}",
+        //         self.name(),
+        //         stop_pos,
+        //         self.instr_list().last().unwrap().end_pos
+        //     );
+        // }
+        //
+        // // (2) Calculate exhaustive instruction coverage (instructions + padding)
+        // let mut instr_val: Vec<Instruction> = Vec::new();
+        // let mut instr_end: Vec<usize> = Vec::new();
+        //
+        // // Padding (instructions are already sorted)
+        // let mut pad_val = self.default_value();
+        // let mut last_end = 0;
+        // let samp_rate = self.samp_rate();
+        //
+        // for instr_book in self.instr_list().iter() {
+        //     // Add padding before this instruction
+        //     if last_end != instr_book.start_pos {
+        //         instr_val.push(Instruction::new_const(pad_val));
+        //         instr_end.push(instr_book.start_pos);
+        //     }
+        //     // Add original instruction
+        //     instr_val.push(instr_book.instr.clone());
+        //     instr_end.push(instr_book.end_pos);
+        //
+        //     // Calculate the padding value for the next iteration
+        //     pad_val = if instr_book.keep_val {
+        //         match instr_book.instr.instr_type {
+        //             // Constant instruction: just retrieve its value for future padding
+        //             InstrType::CONST => *instr_book.instr.args.get("value").unwrap(),
+        //             // Other instructions: simulate end_pos
+        //             _ => {
+        //                 let t_end = (instr_book.end_pos as f64) / samp_rate;
+        //                 let mut t_arr = array![t_end];
+        //                 instr_book.instr.eval_inplace(&mut t_arr.view_mut());
+        //                 t_arr[0]
+        //             }
+        //         }
+        //     } else {
+        //         self.default_value()
+        //     };
+        //     last_end = instr_book.end_pos;
+        // }
+        // // Pad the last instruction
+        // if self.instr_list().last().unwrap().end_pos != stop_pos {
+        //     instr_val.push(Instruction::new_const(pad_val));
+        //     instr_end.push(stop_pos);
+        // }
+        //
+        // // (3) Transfer prepared instr_val and instr_end into compile cache vectors
+        // //     (merge adjacent instructions, if possible)
+        // self.clear_compile_cache();
+        // for i in 0..instr_end.len() {
+        //     if self.instr_val().is_empty() || instr_val[i] != *self.instr_val().last().unwrap() {
+        //         self.instr_val_().push(instr_val[i].clone());
+        //         self.instr_end_().push(instr_end[i]);
+        //     } else {
+        //         *self.instr_end_().last_mut().unwrap() = instr_end[i];
+        //     }
+        // }
+        // *self.fresh_compiled_() = true;
     }
 
     /// Utility function for signal sampling.
@@ -331,9 +331,10 @@ pub trait BaseChannel {
     /// Retrieves the last instruction from the edit cache and converts its end position
     /// to a time value using the sampling rate. If the edit cache is empty, it returns `0`.
     fn edit_stop_time(&self) -> f64 {
-        self.instr_list()
-            .last()
-            .map_or(0., |instr| instr.end_pos as f64 / self.samp_rate())
+        todo!();
+        // self.instr_list()
+        //     .last()
+        //     .map_or(0., |instr| instr.end_pos as f64 / self.samp_rate())
     }
 
     // fn add_instr_(&mut self, instr: Instruction, t: f64, duration: f64, keep_val: bool, had_conflict: bool) {
@@ -395,6 +396,9 @@ pub trait BaseChannel {
             None => None,
         };
         let mut new_instr_book = InstrBook::new(start_pos, end_spec, func);
+        // // ToDo DEBUG
+        // println!("\n======================\n{new_instr_book}");
+        // // ToDo DEBUG
 
         // Check for any collisions with already existing instructions
         // - collision on the left
@@ -411,6 +415,9 @@ pub trait BaseChannel {
             if prev_end <= new_instr_book.start_pos {
                 // All good - no collision here!
             } else if prev_end == new_instr_book.start_pos + 1 {
+                // ToDo DEBUG
+                print!("⚠️ 1-tick collision on the left - ");
+                // ToDo DEBUG
                 // Collision of precisely 1 tick
                 //  This might be due to a rounding error for back-to-back pulses. Try to auto-fix it, if possible.
                 //  Action depends on the new instruction duration type:
@@ -420,11 +427,20 @@ pub trait BaseChannel {
                     Some(dur) => {
                         assert!(dur - 1 >= 1, "1-tick collision on the left cannot be resolved by trimming since the new instruction is only 1 tick long");
                         new_instr_book.start_pos += 1;
+                        // ToDo DEBUG
+                        println!("resolved by trimmed 1 tick on the left");
+                        // ToDo DEBUG
                     },
                     None => {
                         new_instr_book.start_pos += 1;
+                        // ToDo DEBUG
+                        println!("resolved by shifting by 1 tick to the right");
+                        // ToDo DEBUG
                     },
                 };
+                // ToDo DEBUG
+                println!("{new_instr_book}\n======================\n");
+                // ToDo DEBUG
             } else {
                 // Serious collision of 2 or more ticks due to a user mistake
                 panic!("Collision on the left!")  // ToDo: more descriptive message
@@ -444,6 +460,9 @@ pub trait BaseChannel {
             if end_pos <= next.start_pos {
                 // All good - no collision here!
             } else if end_pos == next.start_pos + 1 {
+                // ToDo DEBUG
+                print!("⚠️ 1-tick collision on the right - ");
+                // ToDo DEBUG
                 // Collision of precisely 1 tick
                 //  This might be due to a rounding error for back-to-back pulses. Try to auto-fix it, if possible.
                 //  Action depends on the new instruction duration type:
@@ -453,9 +472,15 @@ pub trait BaseChannel {
                     Some(dur) => {
                         assert!(dur - 1 >= 1, "1-tick collision on the right cannot be resolved by trimming since the new instruction is only 1 tick long");
                         new_instr_book.end_spec.as_mut().unwrap().0 -= 1;
+                        // ToDo DEBUG
+                        println!("resolved by trimmed 1 tick on the right");
+                        // ToDo DEBUG
                     },
                     None => panic!("Attempt to insert go_something-type instruction {} right at the start of another instruction {}", new_instr_book, next),
                 }
+                // ToDo DEBUG
+                println!("{new_instr_book}\n======================\n");
+                // ToDo DEBUG
             } else {
                 // Serious collision of 2 or more ticks due to a user mistake
                 panic!("Collision on the right")  // ToDo: more descriptive message
