@@ -408,9 +408,9 @@ pub trait BaseChannel {
             None => None,
         };
         let mut new_instr_book = InstrBook::new(start_pos, end_spec, func);
-        // // ToDo DEBUG
-        // println!("\n======================\n{new_instr_book}");
-        // // ToDo DEBUG
+        // ToDo DEBUG
+        println!("\n======================\n{new_instr_book}");
+        // ToDo DEBUG
 
         // Check for any collisions with already existing instructions
         // - collision on the left
