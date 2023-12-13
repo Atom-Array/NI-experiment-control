@@ -306,6 +306,8 @@ pub struct InstrBook {
     pub start_pos: usize,
     pub end_spec: Option<(usize, bool)>,
     pub instr: Instruction,
+    pub t: f64,
+    pub dur_spec: Option<(f64, bool)>,
 }
 impl InstrBook {
     /// Constructs a new `InstrBook` object.
@@ -353,6 +355,8 @@ impl InstrBook {
             start_pos,
             end_spec,
             instr: func,
+            t: 0.0,
+            dur_spec: Some((0.0, false)),
         }
     }
     pub fn end_pos(&self) -> Option<usize> {

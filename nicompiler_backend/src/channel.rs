@@ -63,7 +63,7 @@
 //! AO channels are both streamable and editable. DO line channels are editable but not streamable, and DO port
 //! channels are non-editable yet streamable.
 
-use ndarray::{array, s, Array1};
+use ndarray::{array, s, Array1, ArrayViewMut1};
 use std::collections::BTreeSet;
 
 use crate::instruction::*;
@@ -95,6 +95,9 @@ pub enum TaskType {
 /// to interact with NI devices, ensuring consistency and safety in channel operations.
 pub trait BaseChannel {
     // Immutable field methods
+    fn instr_count(&self) -> usize;
+    fn increment_instr_count(&mut self);
+
     fn samp_rate(&self) -> f64;
     fn name(&self) -> &str;
     fn task_type(&self) -> TaskType;
@@ -381,6 +384,8 @@ pub trait BaseChannel {
             None => None,
         };
         let mut new_instr_book = InstrBook::new(start_pos, end_spec, func);
+        new_instr_book.t = t;
+        new_instr_book.dur_spec = dur_spec;
 
         // Check for any collisions with already existing instructions
         // - collision on the left
@@ -391,6 +396,28 @@ pub trait BaseChannel {
             if prev_end <= new_instr_book.start_pos {
                 // All good - no collision here!
             } else if prev_end == new_instr_book.start_pos + 1 {
+                // TODO Debug
+                // Previous instruction
+                let prev_t = prev.t;
+                let (prev_dur, keep_val_) = prev.dur_spec.unwrap();
+                let prev_start_pos = prev.start_pos;
+                let (prev_end_pos, keep_val_) = prev.end_spec.unwrap();
+                // This instruction
+                let (dur, keep_val_) = dur_spec.unwrap();
+                let (end_pos, keep_val_) = end_spec.unwrap();
+                panic!("Encountered 1-tick collision on the left\n\n\
+                        Previous instruction on the left: \n\
+                        \t t = {prev_t} s\n\
+                        \t dur = {prev_dur} s\n\
+                        \t start_pos = {prev_start_pos} \n\
+                        \t end_pos = {prev_end_pos}\n\
+                        \n\
+                        New instruction:\n\
+                        \t t = {t} s\n\
+                        \t dur = {dur} s\n\
+                        \t start_pos = {start_pos} \n\
+                        \t end_pos = {end_pos} ");
+                // TODO Debug
                 // Collision of precisely 1 tick
                 //  This might be due to a rounding error for back-to-back pulses. Try to auto-fix it, if possible.
                 //  Action depends on the new instruction duration type:
@@ -422,6 +449,9 @@ pub trait BaseChannel {
             if end_pos <= next.start_pos {
                 // All good - no collision here!
             } else if end_pos == next.start_pos + 1 {
+                // TODO Debug
+                panic!("Encountered 1-tick collision on the right");
+                // TODO Debug
                 // Collision of precisely 1 tick
                 //  This might be due to a rounding error for back-to-back pulses. Try to auto-fix it, if possible.
                 //  Action depends on the new instruction duration type:
@@ -443,6 +473,33 @@ pub trait BaseChannel {
                     \t{next}")
             };
         };
+
+        // TODO Debug
+        if self.instr_count() == 10 {
+            // Previous instruction
+            let prev = self.instr_list().range(..&new_instr_book).next_back().unwrap();
+            let prev_t = prev.t;
+            let (prev_dur, keep_val_) = prev.dur_spec.unwrap();
+            let prev_start_pos = prev.start_pos;
+            let (prev_end_pos, keep_val_) = prev.end_spec.unwrap();
+            // This instruction
+            let (dur, keep_val_) = dur_spec.unwrap();
+            let (end_pos, keep_val_) = end_spec.unwrap();
+            panic!("Did not encounter 1-tick collision on the left\n\n\
+                    Previous instruction on the left: \n\
+                    \t t = {prev_t} s\n\
+                    \t dur = {prev_dur} s\n\
+                    \t start_pos = {prev_start_pos} \n\
+                    \t end_pos = {prev_end_pos}\n\
+                    \n\
+                    New instruction:\n\
+                    \t t = {t} s\n\
+                    \t dur = {dur} s\n\
+                    \t start_pos = {start_pos} \n\
+                    \t end_pos = {end_pos} ");
+        };
+        self.increment_instr_count();
+        // TODO Debug
 
         self.instr_list_().insert(new_instr_book);
         *self.fresh_compiled_() = false;
@@ -622,6 +679,7 @@ pub trait BaseChannel {
 /// - `instr_end`: Stores the ending points of compiled instructions.
 /// - `instr_val`: Holds the values of the compiled instructions.
 pub struct Channel {
+    instr_count: usize,
     samp_rate: f64,
     fresh_compiled: bool,
     task_type: TaskType,
@@ -633,6 +691,14 @@ pub struct Channel {
 }
 
 impl BaseChannel for Channel {
+    fn instr_count(&self) -> usize {
+        self.instr_count
+    }
+    fn increment_instr_count(&mut self) {
+        self.instr_count += 1;
+    }
+
+
     fn samp_rate(&self) -> f64 {
         self.samp_rate
     }
@@ -696,6 +762,7 @@ impl Channel {
     ///
     pub fn new(task_type: TaskType, name: &str, samp_rate: f64, default_value: f64) -> Self {
         Self {
+            instr_count: 0,
             samp_rate,
             task_type,
             fresh_compiled: true,
