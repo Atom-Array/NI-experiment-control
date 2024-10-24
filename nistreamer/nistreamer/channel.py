@@ -82,6 +82,13 @@ class BaseChanProxy:
             chan_name=self.chan_name
         )
 
+    def eval_point(self, t):
+        return self._streamer.channel_eval_point(
+            dev_name=self._card_max_name,
+            chan_name=self.chan_name,
+            t=t
+        )
+
 
 class AOChanProxy(BaseChanProxy):
     def __init__(

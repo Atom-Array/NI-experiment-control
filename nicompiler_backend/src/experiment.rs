@@ -1320,6 +1320,12 @@ pub trait BaseExperiment {
             (*chan).last_instr_end_time()
         })
     }
+
+    fn channel_eval_point(&mut self, dev_name: &str, chan_name: &str, t: f64) -> f64 {
+        self.channel_op(dev_name, chan_name, |chan| {
+            (*chan).eval_point(t)
+        })
+    }
 }
 
 /// A concrete struct consisting of a collection of devices.
@@ -1616,6 +1622,10 @@ macro_rules! impl_exp_boilerplate {
                 BaseExperiment::channel_calc_signal_nsamps(
                     self, dev_name, chan_name, start_time, end_time, num_samps,
                 )
+            }
+
+            pub fn channel_eval_point(&mut self, dev_name: &str, chan_name: &str, t: f64) -> f64 {
+                BaseExperiment::channel_eval_point(self, dev_name, chan_name, t)
             }
         }
     };
