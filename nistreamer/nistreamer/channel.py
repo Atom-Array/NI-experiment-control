@@ -83,6 +83,11 @@ class BaseChanProxy:
         )
 
     def eval_point(self, t):
+        """Calculates the value at point `t` given all the instructions that have been added to the channel so far.
+
+        :param t: time at which to calculate the value
+        :return: channel value
+        """
         return self._streamer.channel_eval_point(
             dev_name=self._card_max_name,
             chan_name=self.chan_name,
