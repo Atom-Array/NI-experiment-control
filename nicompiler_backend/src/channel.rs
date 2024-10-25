@@ -629,6 +629,20 @@ pub trait BaseChannel {
         self.fill_signal_nsamps(start_pos, end_pos, num_samps, &mut buffer.view_mut());
         buffer.to_vec()
     }
+
+    fn eval_point(&mut self, t: f64) -> f64 {
+        let pos = (t * self.samp_rate()).round() as usize;
+
+        if self.is_fresh_compiled() && pos <= self.total_samps() {
+            // No need to recompile
+        } else {
+            self.compile(usize::max(pos, self.last_instr_end_pos()))
+        }
+
+        let instr_idx = self.binfind_first_intersect_instr(pos);
+        let instr = self.instr_val().get(instr_idx).unwrap();
+        instr.eval_point(t)
+    }
 }
 
 /// Represents a physical channel on an NI device.
