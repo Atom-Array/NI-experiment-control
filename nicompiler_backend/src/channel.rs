@@ -630,7 +630,13 @@ pub trait BaseChannel {
         buffer.to_vec()
     }
 
+    /// Calculates the value at point `t` given all the instructions that have been added to the channel so far
     fn eval_point(&mut self, t: f64) -> f64 {
+        // Handle the case when no instructions were added yet
+        if self.instr_list().is_empty() {
+            return self.default_value()
+        }
+
         let pos = (t * self.samp_rate()).round() as usize;
 
         if self.is_fresh_compiled() && pos <= self.total_samps() {
